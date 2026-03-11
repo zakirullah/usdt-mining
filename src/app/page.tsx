@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wallet, TrendingUp, Users, Shield, Zap, 
   Lock, Eye, EyeOff, RefreshCw, Globe,
-  ArrowDownRight, ArrowUpRight, Crown, Activity, Cpu, Gift
+  ArrowDownRight, ArrowUpRight, Crown, Activity, Cpu, Gift,
+  LogOut, Clock, Home, Server, Copy, Check, X, AlertCircle, CheckCircle,
+  Menu, CreditCard, Settings, ChevronRight, Timer, Calculator, Percent, DollarSign
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -112,6 +114,7 @@ export default function UsdtMiningLab() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Platform Stats
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
@@ -856,9 +859,49 @@ export default function UsdtMiningLab() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="flex flex-1">
+        {/* Left Sidebar - Desktop Only */}
+        <aside className="hidden lg:flex w-64 flex-col bg-slate-900/50 border-r border-white/5">
+          <nav className="flex-1 p-4 space-y-2">
+            {[
+              { id: 'dashboard', icon: Home, label: 'Dashboard' },
+              { id: 'deposit', icon: ArrowDownRight, label: 'Deposit' },
+              { id: 'plans', icon: Zap, label: 'Mining Plans' },
+              { id: 'withdraw', icon: ArrowUpRight, label: 'Withdraw' },
+              { id: 'referral', icon: Gift, label: 'Referral' },
+              { id: 'transactions', icon: Clock, label: 'Transactions' },
+              { id: 'support', icon: Shield, label: 'Support' },
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  activeTab === item.id 
+                    ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white' 
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          
+          {/* Logout Section */}
+          <div className="p-4 border-t border-white/5">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/40 transition-all font-medium"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
+          <div className="max-w-6xl mx-auto">
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
@@ -933,6 +976,7 @@ export default function UsdtMiningLab() {
           </div>
         </div>
       </main>
+      </div>
 
       {/* Footer */}
       <footer className="border-t border-white/5 py-4 bg-slate-950/50">
