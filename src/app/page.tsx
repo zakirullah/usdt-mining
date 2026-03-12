@@ -89,7 +89,7 @@ export default function UsdtMiningLab() {
   const [isLoadingScreen, setIsLoadingScreen] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState(0);
-  const [hhashrateCounter, setHashrateCounter] = useState(0);
+  const [hashrateCounter, setHashrateCounter] = useState(0);
   
   const loadingMessages = [
     'Connecting Blockchain Nodes...',
