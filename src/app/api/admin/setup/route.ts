@@ -14,6 +14,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid secret' }, { status: 403 });
     }
     
+    if (!email) {
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+    }
+    
     // Find user by email
     const existingUser = await db.user.findUnique({
       where: { email }
@@ -28,28 +32,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         success: true, 
         message: 'User updated to admin', 
-        user: { email: updated.email, role: updated.role } 
-      });
-    } else {
-      // Create admin user
-      const newUser = await db.user.create({
-        data: {
-          email: email,
-          password: 'temp_password_' + Date.now(),
-          walletAddress: '0xAdmin' + Date.now().toString(16),
-          securityPin: '123456',
-          referralCode: 'ADMIN' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-          role: 'admin'
-        }
-      });
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Admin user created. Please update wallet address and PIN.', 
-        user: { email: newUser.email, role: newUser.role } 
+        user: { 
+          id: updated.id,
+          email: updated.email, 
+          walletAddress: updated.walletAddress,
+          role: updated.role 
+        } 
       });
     }
-  } catch (error) {
+    
+    // Generate unique wallet address
+    const timestamp = Date.now();
+    const randomHex = Math.random().toString(16).substring(2, 10);
+    const walletAddress = `0x${randomHex.padEnd(40, '0').slice(0, 40)}`;
+    
+    // Generate unique referral code
+    const referralCode = `ADM${timestamp.toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    
+    // Create admin user
+    const newUser = await db.user.create({
+      data: {
+        email: email,
+        password: 'temp_' + timestamp,
+        walletAddress: walletAddress,
+        securityPin: '123456',
+        referralCode: referralCode,
+        role: 'admin'
+      }
+    });
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Admin user created. Please update your wallet address and PIN through the app.', 
+      user: { 
+        id: newUser.id,
+        email: newUser.email, 
+        walletAddress: newUser.walletAddress,
+        role: newUser.role,
+        referralCode: newUser.referralCode
+      },
+      note: 'Your temporary PIN is 123456. Please change it after first login.'
+    });
+  } catch (error: any) {
     console.error('Admin setup error:', error);
-    return NextResponse.json({ error: 'Failed to setup admin' }, { status: 500 });
+    
+    // Check for unique constraint violation
+    if (error.code === 'P2002') {
+      return NextResponse.json({ 
+        error: 'Unique constraint violation. Please try again.', 
+        field: error.meta?.target 
+      }, { status: 400 });
+    }
+    
+    return NextResponse.json({ 
+      error: 'Failed to setup admin', 
+      details: error.message 
+    }, { status: 500 });
   }
 }
