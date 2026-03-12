@@ -7,7 +7,7 @@ import {
   Lock, Eye, EyeOff, RefreshCw, Globe,
   ArrowDownRight, ArrowUpRight, Crown, Activity, Cpu, Gift,
   LogOut, Clock, Home, Server, Copy, Check, X, AlertCircle, CheckCircle,
-  Menu, CreditCard, Settings, ChevronRight, Timer, Calculator, Percent, DollarSign
+  Menu, CreditCard, Settings, ChevronRight, Timer, Calculator, Percent, DollarSign, Bell
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -38,8 +38,11 @@ interface User {
   walletAddress: string;
   balance: number;
   totalProfit: number;
+  totalDeposit: number;
+  totalWithdraw: number;
   referralEarnings: number;
   referralCode: string;
+  role?: string;
 }
 
 interface MiningData {
@@ -124,6 +127,15 @@ export default function UsdtMiningLab() {
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>([]);
   const [currentActivityIndex, setCurrentActivityIndex] = useState(0);
   const [miningPower, setMiningPower] = useState(0);
+
+  // Admin Panel State
+  const [adminDeposits, setAdminDeposits] = useState<any[]>([]);
+  const [adminWithdrawals, setAdminWithdrawals] = useState<any[]>([]);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminStats, setAdminStats] = useState({ totalUsers: 0, totalDeposits: 0, totalWithdrawals: 0, pendingDeposits: 0, pendingWithdrawals: 0 });
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
 
   const particlesRef = useRef<HTMLDivElement>(null);
 
@@ -321,6 +333,81 @@ export default function UsdtMiningLab() {
     setPinInput('');
     setSuccess('Logged out successfully');
   };
+
+  // ==================== ADMIN FUNCTIONS ====================
+  const fetchAdminData = async () => {
+    setAdminLoading(true);
+    try {
+      const [statsRes, depositsRes, withdrawalsRes] = await Promise.all([
+        fetch('/api/admin?type=stats'),
+        fetch('/api/admin?type=deposits&status=pending'),
+        fetch('/api/admin?type=withdrawals&status=pending')
+      ]);
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setAdminStats(data.stats);
+      }
+      if (depositsRes.ok) {
+        const data = await depositsRes.json();
+        setAdminDeposits(data.deposits || []);
+      }
+      if (withdrawalsRes.ok) {
+        const data = await withdrawalsRes.json();
+        setAdminWithdrawals(data.withdrawals || []);
+      }
+    } catch (err) {
+      console.error('Admin data fetch error:', err);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const handleAdminAction = async (action: string, id: string) => {
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Action failed');
+      
+      setSuccess(`Action completed successfully!`);
+      fetchAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    }
+  };
+
+  const handleSendBroadcast = async () => {
+    if (!broadcastTitle || !broadcastMessage) {
+      setError('Title and message are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: broadcastTitle, message: broadcastMessage, type: 'info' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Broadcast failed');
+      
+      setSuccess('Broadcast sent to all users!');
+      setBroadcastTitle('');
+      setBroadcastMessage('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Broadcast failed');
+    }
+  };
+
+  // Fetch admin data when admin tab is active
+  useEffect(() => {
+    if (activeTab === 'admin' && user?.role === 'admin') {
+      fetchAdminData();
+    }
+  }, [activeTab, user?.role]);
 
   // Clear messages
   useEffect(() => {
@@ -871,6 +958,7 @@ export default function UsdtMiningLab() {
               { id: 'referral', icon: Gift, label: 'Referral' },
               { id: 'transactions', icon: Clock, label: 'Transactions' },
               { id: 'support', icon: Shield, label: 'Support' },
+              ...(user?.role === 'admin' ? [{ id: 'admin', icon: Settings, label: 'Admin Panel' }] : []),
             ].map(item => (
               <button
                 key={item.id}
@@ -902,6 +990,10 @@ export default function UsdtMiningLab() {
         {/* Main Content */}
         <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
           <div className="max-w-6xl mx-auto">
+          
+          {/* Dashboard Tab */}
+          {(activeTab === 'dashboard' || !user?.role) && (
+            <>
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
@@ -965,7 +1057,7 @@ export default function UsdtMiningLab() {
                       <div className={`font-bold ${tx.type === 'withdrawal' ? 'text-red-400' : 'text-emerald-400'}`}>
                         {tx.type === 'withdrawal' ? '-' : '+'}${formatNumber(tx.amount)}
                       </div>
-                      <div className={`text-xs ${tx.status === 'approved' ? 'text-emerald-400' : 'text-amber-400'}`}>{tx.status}</div>
+                      <div className={`text-xs ${tx.status === 'approved' || tx.status === 'completed' ? 'text-emerald-400' : 'text-amber-400'}`}>{tx.status}</div>
                     </div>
                   </div>
                 ))}
@@ -974,6 +1066,148 @@ export default function UsdtMiningLab() {
               <p className="text-gray-500 text-center py-8">No transactions yet</p>
             )}
           </div>
+            </>
+          )}
+
+        {/* Admin Panel */}
+        {activeTab === 'admin' && user?.role === 'admin' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-white">Admin Panel</h2>
+            
+            {/* Admin Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="bg-slate-900/80 border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-3xl font-bold text-cyan-400">{adminStats.totalUsers}</div>
+                <div className="text-gray-400 text-sm">Total Users</div>
+              </div>
+              <div className="bg-slate-900/80 border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-3xl font-bold text-emerald-400">${formatNumber(adminStats.totalDeposits, 0)}</div>
+                <div className="text-gray-400 text-sm">Total Deposits</div>
+              </div>
+              <div className="bg-slate-900/80 border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-3xl font-bold text-red-400">${formatNumber(adminStats.totalWithdrawals, 0)}</div>
+                <div className="text-gray-400 text-sm">Total Withdrawals</div>
+              </div>
+              <div className="bg-slate-900/80 border border-amber-500/50 rounded-xl p-4 text-center">
+                <div className="text-3xl font-bold text-amber-400">{adminStats.pendingDeposits}</div>
+                <div className="text-gray-400 text-sm">Pending Deposits</div>
+              </div>
+              <div className="bg-slate-900/80 border border-amber-500/50 rounded-xl p-4 text-center">
+                <div className="text-3xl font-bold text-amber-400">{adminStats.pendingWithdrawals}</div>
+                <div className="text-gray-400 text-sm">Pending Withdrawals</div>
+              </div>
+            </div>
+
+            {/* Pending Deposits */}
+            <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <ArrowDownRight className="w-5 h-5 text-emerald-400" />
+                Pending Deposits
+              </h3>
+              {adminLoading ? (
+                <p className="text-gray-400 text-center py-4">Loading...</p>
+              ) : adminDeposits.length > 0 ? (
+                <div className="space-y-3">
+                  {adminDeposits.map((deposit) => (
+                    <div key={deposit.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl border border-amber-500/30">
+                      <div>
+                        <div className="text-white font-medium">${formatNumber(deposit.amount)} USDT</div>
+                        <div className="text-gray-500 text-xs font-mono">{deposit.user?.walletAddress?.slice(0, 10)}...{deposit.user?.walletAddress?.slice(-6)}</div>
+                        <div className="text-gray-600 text-xs mt-1">TX: {deposit.txHash?.slice(0, 16)}...</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAdminAction('approveDeposit', deposit.id)}
+                          className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 border border-emerald-500/40 text-sm font-medium"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleAdminAction('rejectDeposit', deposit.id)}
+                          className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 border border-red-500/40 text-sm font-medium"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No pending deposits</p>
+              )}
+            </div>
+
+            {/* Pending Withdrawals */}
+            <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <ArrowUpRight className="w-5 h-5 text-red-400" />
+                Pending Withdrawals
+              </h3>
+              {adminLoading ? (
+                <p className="text-gray-400 text-center py-4">Loading...</p>
+              ) : adminWithdrawals.length > 0 ? (
+                <div className="space-y-3">
+                  {adminWithdrawals.map((withdrawal) => (
+                    <div key={withdrawal.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl border border-amber-500/30">
+                      <div>
+                        <div className="text-white font-medium">${formatNumber(withdrawal.amount)} USDT</div>
+                        <div className="text-gray-500 text-xs font-mono">To: {withdrawal.walletAddress?.slice(0, 10)}...{withdrawal.walletAddress?.slice(-6)}</div>
+                        <div className="text-gray-600 text-xs mt-1">User: {withdrawal.user?.walletAddress?.slice(0, 10)}...</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAdminAction('approveWithdrawal', withdrawal.id)}
+                          className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 border border-emerald-500/40 text-sm font-medium"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleAdminAction('rejectWithdrawal', withdrawal.id)}
+                          className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 border border-red-500/40 text-sm font-medium"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No pending withdrawals</p>
+              )}
+            </div>
+
+            {/* Broadcast Message */}
+            <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-blue-400" />
+                Send Broadcast Message
+              </h3>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Broadcast Title"
+                  value={broadcastTitle}
+                  onChange={(e) => setBroadcastTitle(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                />
+                <textarea
+                  placeholder="Broadcast Message..."
+                  value={broadcastMessage}
+                  onChange={(e) => setBroadcastMessage(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 resize-none"
+                />
+                <button
+                  onClick={handleSendBroadcast}
+                  disabled={!broadcastTitle || !broadcastMessage}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                >
+                  Send to All Users
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
       </main>
       </div>
