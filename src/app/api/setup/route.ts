@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { PrismaClient } from '@prisma/client';
+import { createHash } from 'crypto';
+
+// Hash PIN
+function hashPin(pin: string): string {
+  return createHash('sha256').update(pin).digest('hex');
+}
 
 // One-time setup endpoint to initialize database and create admin
 // DELETE THIS FILE AFTER SETUP
@@ -59,11 +64,15 @@ export async function POST(request: NextRequest) {
     });
     
     if (existingUser) {
+      // Update the PIN to hashed version
       user = await db.user.update({
         where: { email },
-        data: { role: 'admin' }
+        data: { 
+          role: 'admin',
+          securityPin: hashPin('123456')
+        }
       });
-      results.push('User updated to admin');
+      results.push('User updated to admin with hashed PIN');
     } else {
       // Generate unique values
       const timestamp = Date.now();
@@ -76,12 +85,12 @@ export async function POST(request: NextRequest) {
           email: email,
           password: 'temp_' + timestamp,
           walletAddress: walletAddress,
-          securityPin: '123456',
+          securityPin: hashPin('123456'),
           referralCode: referralCode,
           role: 'admin'
         }
       });
-      results.push('Admin user created');
+      results.push('Admin user created with hashed PIN');
     }
     
     return NextResponse.json({ 
@@ -94,7 +103,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
         referralCode: user.referralCode
       },
-      note: 'Your temporary PIN is 123456. Login with your wallet address and PIN to access admin panel.'
+      note: 'Your PIN is 123456. Login with your wallet address and PIN to access admin panel.'
     });
   } catch (error: any) {
     console.error('Setup error:', error);
