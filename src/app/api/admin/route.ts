@@ -3,39 +3,22 @@ import { db } from '@/lib/db';
 
 // Middleware to check admin access
 async function checkAdmin(request: NextRequest) {
-  try {
-    const token = request.cookies.get('auth_token')?.value;
+  const token = request.cookies.get('auth_token')?.value;
 
-    if (!token) {
-      console.log('Admin check: No token found');
-      return null;
-    }
-
-    const session = await db.session.findUnique({
-      where: { token },
-      include: { user: true }
-    });
-
-    if (!session) {
-      console.log('Admin check: Session not found for token');
-      return null;
-    }
-    
-    if (session.expiresAt < new Date()) {
-      console.log('Admin check: Session expired');
-      return null;
-    }
-    
-    if (session.user.role !== 'admin') {
-      console.log('Admin check: User is not admin, role:', session.user.role);
-      return null;
-    }
-
-    return session;
-  } catch (error) {
-    console.error('Admin check error:', error);
+  if (!token) {
     return null;
   }
+
+  const session = await db.session.findUnique({
+    where: { token },
+    include: { user: true }
+  });
+
+  if (!session || session.expiresAt < new Date() || session.user.role !== 'admin') {
+    return null;
+  }
+
+  return session;
 }
 
 // Get all users
@@ -130,10 +113,10 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Admin GET error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message, code: error.code },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
